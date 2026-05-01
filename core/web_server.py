@@ -59,8 +59,9 @@ def _summary_payload(reader: SessionReader) -> dict:
         for a in detector.scan(latest):
             anomaly_rows.append({
                 "turn": a.turn_number,
-                "tokens": a.tokens,
+                "tokens": a.actual_tokens,
                 "z_score": round(a.z_score, 2),
+                "cause": a.probable_cause,
             })
     prune_rows.sort(key=lambda r: r["tokens"], reverse=True)
     prune_rows = prune_rows[:15]
