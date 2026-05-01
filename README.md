@@ -4,8 +4,6 @@ Token usage analytics for [Claude Code](https://docs.anthropic.com/en/docs/claud
 
 > **Status: experimental.** This is a personal project. It will give you useful signal about where your tokens are going, but it is not (yet) a polished tool. See "Honest limitations" below.
 
-Inspired by [nateherkai/token-dashboard](https://github.com/nateherkai/token-dashboard) - the original is more complete and has a real web UI with charts. This project takes a different angle: it focuses on **pruning suggestions** and **anomaly detection** for the latest session, and now ships a minimal browser dashboard of its own.
-
 ## What it does
 
 1. **Web dashboard** (`autopilot.py serve`) - opens a local page at `http://127.0.0.1:8080/` showing totals, per-project breakdown, prune suggestions, and anomalies. Stdlib HTTP server, vanilla JS, no external CDN, no telemetry. Auto-refreshes every 30 seconds.
@@ -69,10 +67,6 @@ Nothing leaves your machine. The web server binds to `127.0.0.1` only - never `0
 - **The pruner is conservative.** It will not delete anything unless you pass `--apply`. Even then, double-check the suggestions - it can over-flag files you actually still need.
 - **No tests yet.** I run it on my own `~/.claude/` and the numbers line up with what I see in [ccusage](https://github.com/ryoppippi/ccusage), but I have not written a proper test suite.
 - **Single-session web UI.** The browser dashboard summarises everything but the prune list and anomaly list only cover the latest session.
-
-## Why this exists
-
-I saw Nate Herkelman's LinkedIn post about his Claude Code token dashboard, liked the idea, and wanted to build something with a slightly different shape - more focused on "what should I do about it" (prune, watch for anomalies) than on browsing every prompt you have ever sent. If you want the full browseable history with charts, use [his project](https://github.com/nateherkai/token-dashboard); if you want a quick "what is wasting tokens in my latest session" view, this one might suit you.
 
 ## License
 
