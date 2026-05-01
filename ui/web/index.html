@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>claude-autopilot</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --accent: #58a6ff;
+    --warn: #f0883e;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  header { padding: 24px 32px; border-bottom: 1px solid var(--border); }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  main { padding: 24px 32px; max-width: 1200px; margin: 0 auto; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 24px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px 20px; }
+  .card .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .card .value { font-size: 22px; font-weight: 600; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .card .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  section h2 { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.num { text-align: right; }
+  .empty { color: var(--muted); font-style: italic; padding: 8px 0; }
+  .notes { color: var(--muted); font-size: 12px; }
+  .notes li { margin-bottom: 4px; }
+  footer { padding: 24px 32px; color: var(--muted); font-size: 12px; border-top: 1px solid var(--border); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px;
+    background: rgba(88,166,255,0.12); color: var(--accent); font-size: 11px; }
+  .warn { color: var(--warn); }
+</style>
+</head>
+<body>
+<header>
+  <h1>claude-autopilot <span class="pill">experimental</span></h1>
+  <p>Local token analytics for Claude Code. Reads <code>~/.claude/projects/</code>. Nothing leaves your machine.</p>
+</header>
+<main>
+  <div class="grid" id="totals"></div>
+
+  <section>
+    <h2>Latest session</h2>
+    <div id="latest"></div>
+  </section>
+
+  <section>
+    <h2>Top projects by tokens</h2>
+    <table>
+      <thead><tr><th>Project</th><th class="num">Sessions</th><th class="num">Tokens</th></tr></thead>
+      <tbody id="projects"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Prune suggestions <span class="pill" id="prune-count"></span></h2>
+    <table>
+      <thead><tr><th>File</th><th class="num">Est. tokens</th><th>Reason</th></tr></thead>
+      <tbody id="prune"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Anomalies in latest session</h2>
+    <table>
+      <thead><tr><th>Turn</th><th class="num">Tokens</th><th class="num">z-score</th><th>Probable cause</th></tr></thead>
+      <tbody id="anomalies"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>How these numbers are counted</h2>
+    <ul class="notes" id="notes"></ul>
+  </section>
+</main>
+<footer>
+  Auto-refreshes every 30 seconds. Source: <a href="https://github.com/Dharmik2510/claude-autopilot" style="color:var(--accent)">github.com/Dharmik2510/claude-autopilot</a>
+</footer>
+
+<script>
+  const fmt = n => n == null ? '—' : n.toLocaleString();
+  const money = n => n == null ? '—' : '$' + n.toFixed(4);
+
+  function renderTotals(t, todayCost) {
+    const cards = [
+      { label: 'Input tokens', value: fmt(t.input_tokens) },
+      { label: 'Output tokens', value: fmt(t.output_tokens) },
+      { label: 'Cache reads', value: fmt(t.cache_read_tokens), sub: 'tokens served from cache' },
+      { label: 'Cache writes', value: fmt(t.cache_write_tokens) },
+      { label: 'Sessions', value: fmt(t.sessions) },
+      { label: 'Turns', value: fmt(t.turns) },
+      { label: 'Today (API rate)', value: money(todayCost), sub: 'Pro/Max users: actual cost differs' },
+    ];
+    document.getElementById('totals').innerHTML = cards.map(c =>
+      '<div class="card"><div class="label">' + c.label + '</div>' +
+      '<div class="value">' + c.value + '</div>' +
+      (c.sub ? '<div class="sub">' + c.sub + '</div>' : '') +
+      '</div>'
+    ).join('');
+  }
+
+  function renderLatest(l) {
+    const el = document.getElementById('latest');
+    if (!l || !l.id) { el.innerHTML = '<div class="empty">No sessions found yet.</div>'; return; }
+    el.innerHTML =
+      '<div><strong>' + l.project + '</strong> &middot; <code>' + l.id + '</code></div>' +
+      '<div class="sub" style="margin-top:6px;color:var(--muted)">' +
+      l.turns + ' turns &middot; ' + fmt(l.total_tokens) + ' tokens</div>';
+  }
+
+  function renderRows(id, rows, cols, emptyMsg) {
+    const tb = document.getElementById(id);
+    if (!rows.length) {
+      tb.innerHTML = '<tr><td colspan="' + cols.length + '" class="empty">' + emptyMsg + '</td></tr>';
+      return;
+    }
+    tb.innerHTML = rows.map(r =>
+      '<tr>' + cols.map(c => {
+        const v = c.fn ? c.fn(r) : r[c.key];
+        return '<td' + (c.num ? ' class="num"' : '') + '>' + (v == null ? '' : v) + '</td>';
+      }).join('') + '</tr>'
+    ).join('');
+  }
+
+  async function load() {
+    try {
+      const res = await fetch('/api/summary');
+      const data = await res.json();
+      renderTotals(data.totals, data.today_cost_usd);
+      renderLatest(data.latest_session);
+      renderRows('projects', data.projects, [
+        { key: 'name' },
+        { key: 'sessions', num: true, fn: r => fmt(r.sessions) },
+        { key: 'tokens', num: true, fn: r => fmt(r.tokens) },
+      ], 'No projects yet.');
+      renderRows('prune', data.prune_suggestions, [
+        { key: 'file' },
+        { key: 'tokens', num: true, fn: r => fmt(r.tokens) },
+        { key: 'reason' },
+      ], 'Nothing to prune in the latest session.');
+      document.getElementById('prune-count').textContent =
+        data.prune_suggestions.length ? data.prune_suggestions.length + ' suggestions' : '';
+      renderRows('anomalies', data.anomalies, [
+        { key: 'turn', num: true },
+        { key: 'tokens', num: true, fn: r => fmt(r.tokens) },
+        { key: 'z_score', num: true },
+        { key: 'cause' },
+      ], 'No anomalies in the latest session.');
+      document.getElementById('notes').innerHTML =
+        data.notes.map(n => '<li>' + n + '</li>').join('');
+    } catch (e) {
+      document.body.insertAdjacentHTML('afterbegin',
+        '<div style="background:#5a1d1d;color:#fff;padding:8px 16px">Could not load /api/summary: ' + e.message + '</div>');
+    }
+  }
+
+  load();
+  setInterval(load, 30000);
+</script>
+</body>
+</html>
