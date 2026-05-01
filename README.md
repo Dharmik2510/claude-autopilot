@@ -1,82 +1,33 @@
-# Claude Autopilot
+# claude-autopilot
 
-**Token usage analytics for Claude Code.** A small, honest CLI that reads your `~/.claude/projects/` session data and helps you understand where your context tokens are going.
+Token usage analytics for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Reads the JSONL session files Claude Code writes to `~/.claude/projects/` and turns them into a local dashboard, prune suggestions, and a rough cost forecast.
 
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
-[![Status](https://img.shields.io/badge/status-experimental-orange?style=flat-square)](#status)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+> **Status: experimental.** This is a personal project. It will give you useful signal about where your tokens are going, but it is not (yet) a polished tool. See "Honest limitations" below.
 
-> Inspired by Nate Herkelman’s Claude Code dashboard. I wanted to push the idea further toward something *actionable* (what should I cut?) rather than just descriptive (here is what happened).
-
----
-
-## Status
-
-This is an early-stage personal project, not a polished product. Numbers shown by the tool are estimates, not guarantees. I am sharing it because the **context pruning** feature has saved me real tokens on real sessions and I think it could help others too. Feedback and PRs welcome.
-
----
+Inspired by [nateherkai/token-dashboard](https://github.com/nateherkai/token-dashboard) - the original is more complete and has a real web UI with charts. This project takes a different angle: it focuses on **pruning suggestions** and **anomaly detection** for the latest session, and now ships a minimal browser dashboard of its own.
 
 ## What it does
 
-Four things, in order of how useful I have actually found them:
-
-### 1. Context pruning suggestions  (the main reason this exists)
-
-Looks at which files Claude actually referenced in your recent session turns and flags context that has gone stale or is auto-generated bloat (lock files, etc.). Tells you what to cut.
-
-```
-$ python autopilot.py prune
-
-Context pruning suggestions  (estimated savings: 7,800 tokens)
-
-  package-lock.json                  3,200 tok   Auto-generated, safe to skip
-  requirements.txt                   2,800 tok   Auto-generated, safe to skip
-  old_tests/                         1,800 tok   Not referenced in last 9 turns
-
-Run with --apply to update your .claude config.
-```
-
-### 2. Live context fuel gauge
-
-A small terminal dashboard that shows how full your current session’s context window is and what your recent burn rate has been (tokens per minute, averaged over the last few turns).
-
-```
-  Fuel  ████████████░░░░░░░░░░░░░░  47%   Recent burn: 612 tok/min
-
-  Turns: 31     Tokens used: 105,400     Remaining: 94,600
-```
-
-I deliberately do **not** try to predict an "ETA to limit." Burn rate in Claude Code is far too bursty for an honest prediction (a single large file read changes everything). The dashboard shows you the current state and recent trend; you make the call.
-
-### 3. Cost forecast
-
-A rough monthly spend estimate based on your own past usage, broken out by day of week. Useful for spotting patterns ("oh, my Thursdays cost 3x more than my Sundays") more than for getting an exact number.
-
-```
-  Today (est):    $4.20
-  This week:      $19.80
-  Next 30 days:   $127.40
-  Heaviest days:  Monday, Thursday
-  Lightest days:  Saturday, Sunday
-```
-
-### 4. Anomaly log
-
-Lists past turns that consumed unusually large amounts of tokens (z-score outliers) with simple heuristic guesses at the cause. Useful for catching accidental large file reads or runaway tool-call chains in older sessions.
-
----
+1. **Web dashboard** (`autopilot.py serve`) - opens a local page at `http://127.0.0.1:8080/` showing totals, per-project breakdown, prune suggestions, and anomalies. Stdlib HTTP server, vanilla JS, no external CDN, no telemetry. Auto-refreshes every 30 seconds.
+2. **Prune suggestions** (`autopilot.py prune`) - flags files that appear stale in your latest session's context (lockfiles, files referenced once long ago, etc.) so you can decide whether to drop them.
+3. **Anomaly log** (`autopilot.py anomalies`) - z-score scan of per-turn token deltas. Useful for spotting the one turn where you accidentally fed in a 50k-token file.
+4. **Cost forecast** (`autopilot.py forecast`) - rough monthly projection based on your day-of-week usage pattern. **API pricing only** - if you are on Pro or Max your real cost is different.
+5. **Terminal dashboard** (`autopilot.py dashboard`) - same data as the web UI, in a Rich TUI. Use whichever you prefer.
+6. **Watch** (`autopilot.py watch`) - one-line live status in the terminal.
 
 ## What it does not do
 
-A few things I considered, prototyped, then cut because they were not honest enough to ship:
+- No predictive ETA for when your context will run out. Token consumption is too bursty for that prediction to be honest.
+- No "session DNA fingerprint" or efficiency grade. Removed - they were gimmicks.
+- No subagent or Skill-level attribution. The original token-dashboard does this.
+- No interactive charts in the web UI yet. Just real numbers in clean cards and tables.
+- No persistent SQLite cache yet. Sessions are re-parsed on each request (fast for small histories, slower for power users).
 
-- **No "ETA to session limit" prediction.** Bursty workloads make this misleading more often than helpful.
-- **No "session DNA fingerprint" or pattern classifier.** Fun visualisation, but the labels were not reliable enough to base decisions on.
-- **No "prompt efficiency score."** There is no objective way to grade prompt quality from token counts alone, so any score would be made up.
+## How the numbers are counted
 
-I would rather ship a small thing that works than a flashy thing that overpromises.
+Claude Code writes each assistant response to disk **2-3 times** while it streams - the same API message gets re-snapshotted as the output grows. If a tool naively sums every JSONL row, the totals will be inflated.
 
----
+`claude-autopilot` dedupes by `message.id` so the totals match what Anthropic actually billed. This is the same approach Nate Herkelman documents in token-dashboard. If you cross-check against a tool that does not dedup (some early scripts do not), expect this dashboard's numbers to be lower and closer to your real bill.
 
 ## Install
 
@@ -86,87 +37,46 @@ cd claude-autopilot
 pip install -r requirements.txt
 ```
 
-Requires Python 3.11+ and an existing Claude Code installation (so that `~/.claude/projects/` exists).
-
----
+Requires Python 3.8+. The web server uses only stdlib; the terminal dashboard uses `rich` and `click`.
 
 ## Usage
 
 ```bash
-# Try the demo first (no Claude Code data needed)
-python demo.py
+# Open the browser dashboard
+python autopilot.py serve
 
-# Live dashboard
+# Or run the terminal dashboard
 python autopilot.py dashboard
 
-# Pruning suggestions for the most recent session
+# Prune suggestions for the latest session
 python autopilot.py prune
-python autopilot.py prune --apply        # actually edit .claude config
 
-# Cost forecast
-python autopilot.py forecast
-
-# Past anomalies
+# Anomaly log
 python autopilot.py anomalies
 
-# Compact one-line status, refreshed in place (good as a sidebar)
-python autopilot.py watch
+# Rough cost forecast (API rates)
+python autopilot.py forecast --days 30
 ```
 
----
+## Privacy
 
-## How it works
-
-Claude Code stores every session as JSONL files at `~/.claude/projects/<project-hash>/`. Each line is a conversation turn with token usage metadata. Claude Autopilot:
-
-1. Reads those files (with simple mtime-based caching)
-2. Aggregates per-turn token usage and which files Claude referenced via tool calls
-3. Uses recency weighting to identify stale context (files that Claude has stopped touching)
-4. Flags known auto-generated bloat patterns (lock files, build artefacts) for safe pruning
-5. Renders a small Rich-based terminal UI with the current state
-
-There is no machine learning, no LLM calls, no cloud component. It is a few hundred lines of Python that parses local files.
-
----
-
-## Project layout
-
-```
-claude-autopilot/
-├── autopilot.py              CLI entry point
-├── demo.py                   Walkthrough with simulated data
-├── core/
-│   ├── session_reader.py     JSONL parser
-│   ├── fuel_gauge.py         Token/burn-rate state
-│   ├── pruner.py             Stale-context detection
-│   ├── forecaster.py         Per-day-of-week cost estimate
-│   └── anomaly.py            Z-score outlier detection
-├── ui/
-│   └── dashboard.py          Rich live TUI
-└── requirements.txt
-```
-
----
+Nothing leaves your machine. The web server binds to `127.0.0.1` only - never `0.0.0.0` - so other devices on your network cannot reach it. The HTML page loads no external scripts, fonts, or stylesheets. There is no telemetry and no remote calls of any kind.
 
 ## Honest limitations
 
-- The pruner only knows about files Claude referenced via tool calls. It does not yet parse `CLAUDE.md` or auto-loaded files in `.claude/settings.json` directly, so it can miss bloat that is loaded but never touched.
-- Cost estimates assume Sonnet pricing as of early 2025. Update `INPUT_COST_PER_MILLION` / `OUTPUT_COST_PER_MILLION` in `core/forecaster.py` if you use a different model.
-- Tested only on macOS and Linux. Windows users probably need WSL.
-- `--apply` for pruning rewrites your `.claude/settings.json`. Back it up first if you have custom config.
+- **Cost numbers are API-rate.** If you are on a Pro or Max plan, what you actually pay is your subscription, not the per-token math shown here. Treat the cost line as "what this would cost on the API," not as your bill.
+- **The forecast is a back-of-envelope projection**, not a model. It assumes the next 30 days look like the previous 30. Holidays, deadlines, and one-off heavy projects will throw it off.
+- **The pruner is conservative.** It will not delete anything unless you pass `--apply`. Even then, double-check the suggestions - it can over-flag files you actually still need.
+- **No tests yet.** I run it on my own `~/.claude/` and the numbers line up with what I see in [ccusage](https://github.com/ryoppippi/ccusage), but I have not written a proper test suite.
+- **Single-session web UI.** The browser dashboard summarises everything but the prune list and anomaly list only cover the latest session.
 
----
+## Why this exists
 
-## Contributing
-
-PRs and issues welcome, especially for:
-
-- Better pruning heuristics (parsing `CLAUDE.md`, auto-loaded files)
-- Multi-model pricing support
-- Windows compatibility
-
----
+I saw Nate Herkelman's LinkedIn post about his Claude Code token dashboard, liked the idea, and wanted to build something with a slightly different shape - more focused on "what should I do about it" (prune, watch for anomalies) than on browsing every prompt you have ever sent. If you want the full browseable history with charts, use [his project](https://github.com/nateherkai/token-dashboard); if you want a quick "what is wasting tokens in my latest session" view, this one might suit you.
 
 ## License
 
-MIT (c) [Dharmik Soni](https://github.com/Dharmik2510)
+MIT. See [LICENSE](LICENSE).
+
+---
+Built by [Dharmik Soni](https://github.com/Dharmik2510). Bug reports and PRs welcome.
