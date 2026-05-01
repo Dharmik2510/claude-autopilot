@@ -23,6 +23,7 @@ from core.pruner import ContextPruner
 from core.forecaster import CostForecaster
 from core.anomaly import AnomalyDetector
 from ui.dashboard import AutopilotDashboard
+from core import web_server
 
 CLAUDE_PROJECTS_DIR = Path.home() / ".claude" / "projects"
 
@@ -187,6 +188,22 @@ def watch(project, refresh):
         except KeyboardInterrupt:
             click.echo("\n\nStopped.")
             break
+
+
+
+@cli.command()
+@click.option("--port", default=8080, type=int, help="Port for the local web UI")
+@click.option("--no-open", "no_open", is_flag=True, help="Do not auto-open the browser")
+def serve(port, no_open):
+    """
+    Launch the browser dashboard at http://127.0.0.1:<port>/.
+
+    Stdlib-only HTTP server. Binds to 127.0.0.1 only - your prompt history
+    is never exposed to the local network. Auto-refreshes every 30 seconds.
+    """
+    _check_claude_dir()
+    reader = SessionReader(CLAUDE_PROJECTS_DIR)
+    web_server.serve(reader, port=port, open_browser=not no_open)
 
 
 if __name__ == "__main__":
