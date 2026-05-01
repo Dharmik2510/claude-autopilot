@@ -1,337 +1,172 @@
-<div align="center">
+# Claude Autopilot
 
-```
- ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗
-██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝
-██║     ██║     ███████║██║   ██║██║  ██║█████╗  
-██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝  
-╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗
- ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝
-     █████╗ ██╗   ██╗████████╗ ██████╗ ██████╗ ██╗██╗      ██████╗ ████████╗
-    ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗██╔══██╗██║██║     ██╔═══██╗╚══██╔══╝
-    ███████║██║   ██║   ██║   ██║   ██║██████╔╝██║██║     ██║   ██║   ██║   
-    ██╔══██║██║   ██║   ██║   ██║   ██║██╔═══╝ ██║██║     ██║   ██║   ██║   
-    ██║  ██║╚██████╔╝   ██║   ╚██████╔╝██║     ██║███████╗╚██████╔╝   ██║   
-    ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝ ╚═╝     ╚═╝╚══════╝ ╚═════╝    ╚═╝   
-```
+**Token usage analytics for Claude Code.** A small, honest CLI that reads your `~/.claude/projects/` session data and helps you understand where your context tokens are going.
 
-# 🧠 Claude Autopilot
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)](https://python.org)
+[![Status](https://img.shields.io/badge/status-experimental-orange?style=flat-square)](#status)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 
-### *The World's First Predictive AI Session Intelligence Engine*
-
-[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Rich TUI](https://img.shields.io/badge/Rich-Terminal_UI-FF6B6B?style=for-the-badge)](https://github.com/Textualize/rich)
-[![Claude Code](https://img.shields.io/badge/Claude_Code-Compatible-FF8C00?style=for-the-badge)](https://claude.ai)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-
-> **Stop hitting session limits blindly. Start piloting your AI sessions like a pro.**
-
-</div>
+> Inspired by Nate Herkelman’s Claude Code dashboard. I wanted to push the idea further toward something *actionable* (what should I cut?) rather than just descriptive (here is what happened).
 
 ---
 
-## 🔥 What Makes This Different
+## Status
 
-Most token trackers tell you what *happened*. **Claude Autopilot tells you what's *about to happen*.**
-
-| Feature | Other Tools | Claude Autopilot |
-|---------|-------------|-----------------|
-| Token Usage History | ✅ | ✅ |
-| Real-Time Fuel Gauge | ❌ | ✅ Live burn rate |
-| Session Limit Prediction | ❌ | ✅ ETA to limit |
-| Context Pruning AI | ❌ | ✅ What to cut and why |
-| Session DNA Fingerprint | ❌ | ✅ Visual identity per session |
-| Cost Forecasting | ❌ | ✅ Monthly projection |
-| Prompt Efficiency Score | ❌ | ✅ ROI per prompt |
-| Anomaly Detection | ❌ | ✅ Spike alerts |
+This is an early-stage personal project, not a polished product. Numbers shown by the tool are estimates, not guarantees. I am sharing it because the **context pruning** feature has saved me real tokens on real sessions and I think it could help others too. Feedback and PRs welcome.
 
 ---
 
-## ⚡ The Problem
+## What it does
 
-You're deep into a complex refactor with Claude Code. Suddenly:
+Four things, in order of how useful I have actually found them:
+
+### 1. Context pruning suggestions  (the main reason this exists)
+
+Looks at which files Claude actually referenced in your recent session turns and flags context that has gone stale or is auto-generated bloat (lock files, etc.). Tells you what to cut.
 
 ```
-⚠  Context window limit reached. Session ended.
+$ python autopilot.py prune
+
+Context pruning suggestions  (estimated savings: 7,800 tokens)
+
+  package-lock.json                  3,200 tok   Auto-generated, safe to skip
+  requirements.txt                   2,800 tok   Auto-generated, safe to skip
+  old_tests/                         1,800 tok   Not referenced in last 9 turns
+
+Run with --apply to update your .claude config.
 ```
 
-Everything lost. Momentum gone. And you had **zero warning**.
+### 2. Live context fuel gauge
 
-Claude Autopilot solves this with a **predictive engine** that reads your `.claude/projects/` directory in real-time and tells you *before* you hit the wall.
+A small terminal dashboard that shows how full your current session’s context window is and what your recent burn rate has been (tokens per minute, averaged over the last few turns).
+
+```
+  Fuel  ████████████░░░░░░░░░░░░░░  47%   Recent burn: 612 tok/min
+
+  Turns: 31     Tokens used: 105,400     Remaining: 94,600
+```
+
+I deliberately do **not** try to predict an "ETA to limit." Burn rate in Claude Code is far too bursty for an honest prediction (a single large file read changes everything). The dashboard shows you the current state and recent trend; you make the call.
+
+### 3. Cost forecast
+
+A rough monthly spend estimate based on your own past usage, broken out by day of week. Useful for spotting patterns ("oh, my Thursdays cost 3x more than my Sundays") more than for getting an exact number.
+
+```
+  Today (est):    $4.20
+  This week:      $19.80
+  Next 30 days:   $127.40
+  Heaviest days:  Monday, Thursday
+  Lightest days:  Saturday, Sunday
+```
+
+### 4. Anomaly log
+
+Lists past turns that consumed unusually large amounts of tokens (z-score outliers) with simple heuristic guesses at the cause. Useful for catching accidental large file reads or runaway tool-call chains in older sessions.
 
 ---
 
-## 🚀 Key Features
+## What it does not do
 
-### 1. 🔋 Live Token Fuel Gauge
+A few things I considered, prototyped, then cut because they were not honest enough to ship:
 
-A real-time terminal widget showing your session burning like a fuel tank — updated every second:
+- **No "ETA to session limit" prediction.** Bursty workloads make this misleading more often than helpful.
+- **No "session DNA fingerprint" or pattern classifier.** Fun visualisation, but the labels were not reliable enough to base decisions on.
+- **No "prompt efficiency score."** There is no objective way to grade prompt quality from token counts alone, so any score would be made up.
 
-```
-Session Fuel  ████████████████████░░░░░░░  73%  │  ETA to limit: ~14 min  │  Burn: 847 tok/min
-```
-
-Unlike static dashboards, the fuel gauge uses an **exponential moving average** on your burn rate so it adapts as your session intensity changes — slow research phase vs. rapid code generation phases are weighted differently.
-
-### 2. 🧬 Session DNA Fingerprint
-
-Every session generates a unique visual fingerprint based on its token consumption pattern — like a barcode for your AI work:
-
-```
-Session DNA:  ▁▂▄▇█▆▃▁▂▅▇█▅▂▁▃▆█▇▄▂▁▂▄▆▇█▅▃▂▁
-Pattern Type: SPIKE → CRUISE → BURST
-Analysis:     High-complexity refactor detected (3 burst events)
-Similarity:   87% match to your "debugging" sessions
-```
-
-The fingerprint is generated by mapping turn-level token deltas to Unicode block characters (▁▂▃▄▅▆▇█) and then classifying the resulting pattern against your personal session history. Over time, it learns your patterns and can even **predict which type of work you're doing** based on the early shape of the curve.
-
-### 3. ✂️ Smart Context Pruning Engine
-
-Analyzes your active session files and recommends exactly what to remove to save the most tokens:
-
-```
-Pruning Recommendations  (estimated savings: 34,200 tokens = 18% of context)
-─────────────────────────────────────────────────────────────────────────────
-  📄 database_schema.sql     12,400 tok  ║████████████████░░░░░░░░░░░░░  Not referenced in last 8 turns
-  📄 old_migrations/          8,900 tok  ║████████████░░░░░░░░░░░░░░░░░  Likely stale — last touched turn 4
-  📄 package-lock.json        7,200 tok  ║█████████░░░░░░░░░░░░░░░░░░░░  Auto-generated, skip it
-  📄 node_modules snippet     5,700 tok  ║███████░░░░░░░░░░░░░░░░░░░░░░  Never referenced by Claude
-─────────────────────────────────────────────────────────────────────────────
-  Run: autopilot prune --apply    or    autopilot prune --preview
-```
-
-### 4. 💰 Cost Forecasting Dashboard
-
-Projects your monthly Claude Code spend based on personal historical burn patterns:
-
-```
-┌─────────────────────── Monthly Forecast ───────────────────────┐
-│  Today:         $4.20     This week: $18.90                    │
-│  Projected:     $127.40/month                                   │
-│  Peak days:     Monday + Thursday  (sprint days detected)       │
-│  Cheapest:      Sunday  (avg $1.10)                            │
-│  Recommendation: Set 5K token/session budget on weekends        │
-│                  Batch large file reads on Monday mornings      │
-└────────────────────────────────────────────────────────────────┘
-```
-
-### 5. 📊 Prompt Efficiency Scorer
-
-Rates each prompt by tokens-spent vs. task-complexity ratio, building your personal efficiency profile:
-
-```
-Top 5 Most Efficient Prompts This Week
-──────────────────────────────────────────────────────────────────────
-★★★★★  "Fix the null pointer in auth.py line 47"    →  340 tok  → Bug fixed
-★★★★☆  "Add dark mode toggle to settings panel"     →  890 tok  → Feature done
-★★★☆☆  "Refactor the entire API layer"              → 4,200 tok → Large but OK
-★★☆☆☆  "Explain how this codebase works"            → 9,100 tok → High cost for info
-★☆☆☆☆  "Read entire repo and suggest improvements" → 18K tok   → Context bloat!
-
-Efficiency Grade: B+  (top 22% of Claude Code users this week)
-```
-
-### 6. 🚨 Real-Time Anomaly Spike Detector
-
-Auto-flags when a single turn consumes abnormally large tokens, with root cause analysis:
-
-```
-⚡ ANOMALY DETECTED  14:32:07
-────────────────────────────────────────────────────────────────────
-  Turn 23 consumed 4,200 tokens  (8.2x above your session average of 512)
-  Likely cause: Large file ingestion  (requirements.txt or similar)
-  Evidence: Input spike with no matching output spike
-  Recommendation: Target specific functions instead of full file reads
-  Similar past event: 2024-04-12 session "api-refactor" turn 31
-────────────────────────────────────────────────────────────────────
-```
+I would rather ship a small thing that works than a flashy thing that overpromises.
 
 ---
 
-## 🖥️ Terminal Dashboard Preview
-
-```
-╔═══════════════════════════════════════════════════════════════════════╗
-║  🧠 CLAUDE AUTOPILOT v1.0          Session: my-saas-app   14:47:23   ║
-╠═══════════════════════════════════════════════════════════════════════╣
-║  FUEL  ████████████████░░░░░░░░  64%  │  ETA: ~22 min remaining      ║
-║  Burn: 623 tok/min  │  Turns: 31  │  Total: 47,841 / 200,000 tokens  ║
-╠════════════════╦════════════════════╦══════════════════════════════════╣
-║  INPUT SPLIT   ║   OUTPUT SPLIT     ║   SESSION DNA                   ║
-║  ████░░  71%  ║   █░░░░░   29%    ║   ▁▃▅▇█▆▃▂▄▇█▅▁▂▄█▇▅▃▂▁▂▅▇      ║
-║  34K tokens    ║   14K tokens       ║   Pattern: BURST-CRUISE-SPIKE   ║
-╠════════════════╩════════════════════╩══════════════════════════════════╣
-║  TOP CONTEXT CONSUMERS (click to prune)                               ║
-║  📄 app.py             ████████████  8,400 tok  [HOT — active]        ║
-║  📄 database.py        ████████░░░░  6,100 tok  [WARM]                ║
-║  📄 requirements.txt   ████░░░░░░░░  3,200 tok  [PRUNABLE ✂️]        ║
-║  📄 old_tests/         ██░░░░░░░░░░  1,800 tok  [STALE — 12 turns]   ║
-╠═══════════════════════════════════════════════════════════════════════╣
-║  💰 $4.12 today  │  $118.40/month forecast  │  Efficiency Grade: B+  ║
-║  ⚡ No anomalies  │  🔋 Prune to save 12K tokens  │  Pattern: Debug   ║
-╚═══════════════════════════════════════════════════════════════════════╝
-```
-
----
-
-## 📦 Installation
+## Install
 
 ```bash
-# Clone the repo
 git clone https://github.com/Dharmik2510/claude-autopilot.git
 cd claude-autopilot
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the live dashboard (auto-detects your ~/.claude/projects/ dir)
-python autopilot.py dashboard
-
-# Or drop it into your active Claude Code project for project-scoped view
-cp autopilot.py /your-project/
 ```
 
-### Requirements
-- Python 3.11+
-- Claude Code (any version)
-- macOS or Linux (Windows via WSL)
-- 50MB disk space
+Requires Python 3.11+ and an existing Claude Code installation (so that `~/.claude/projects/` exists).
 
 ---
 
-## 🛠️ Usage
+## Usage
 
 ```bash
-# Live dashboard — watches ~/.claude/projects/ in real-time
+# Try the demo first (no Claude Code data needed)
+python demo.py
+
+# Live dashboard
 python autopilot.py dashboard
 
-# Show session DNA fingerprint for all projects
-python autopilot.py dna
-
-# Show DNA for a specific project
-python autopilot.py dna --project my-saas-app
-
-# Get intelligent pruning recommendations
+# Pruning suggestions for the most recent session
 python autopilot.py prune
+python autopilot.py prune --apply        # actually edit .claude config
 
-# Apply pruning suggestions (removes files from .claude context)
-python autopilot.py prune --apply
-
-# Monthly cost forecast with breakdown
+# Cost forecast
 python autopilot.py forecast
 
-# Prompt efficiency report
-python autopilot.py efficiency
-
-# Show anomaly log
+# Past anomalies
 python autopilot.py anomalies
 
-# Export full HTML report with charts
-python autopilot.py report --output report.html
-
-# Watch mode — runs in sidebar while you code
-python autopilot.py watch --compact
+# Compact one-line status, refreshed in place (good as a sidebar)
+python autopilot.py watch
 ```
 
 ---
 
-## 🧱 Architecture
+## How it works
+
+Claude Code stores every session as JSONL files at `~/.claude/projects/<project-hash>/`. Each line is a conversation turn with token usage metadata. Claude Autopilot:
+
+1. Reads those files (with simple mtime-based caching)
+2. Aggregates per-turn token usage and which files Claude referenced via tool calls
+3. Uses recency weighting to identify stale context (files that Claude has stopped touching)
+4. Flags known auto-generated bloat patterns (lock files, build artefacts) for safe pruning
+5. Renders a small Rich-based terminal UI with the current state
+
+There is no machine learning, no LLM calls, no cloud component. It is a few hundred lines of Python that parses local files.
+
+---
+
+## Project layout
 
 ```
 claude-autopilot/
-├── autopilot.py              # Main CLI entry point (Click-based)
+├── autopilot.py              CLI entry point
+├── demo.py                   Walkthrough with simulated data
 ├── core/
-│   ├── session_reader.py     # Parses ~/.claude/projects/ JSONL files
-│   ├── fuel_gauge.py         # Real-time token burn tracker + ETA engine
-│   ├── dna_engine.py         # Session fingerprint generator + classifier
-│   ├── pruner.py             # Context pruning recommender
-│   ├── forecaster.py         # Cost + usage forecasting (linear regression)
-│   └── anomaly.py            # Spike detection (z-score based)
+│   ├── session_reader.py     JSONL parser
+│   ├── fuel_gauge.py         Token/burn-rate state
+│   ├── pruner.py             Stale-context detection
+│   ├── forecaster.py         Per-day-of-week cost estimate
+│   └── anomaly.py            Z-score outlier detection
 ├── ui/
-│   ├── dashboard.py          # Rich Live TUI dashboard
-│   ├── widgets.py            # FuelGauge, DNABar, TokenTable widgets
-│   └── themes.py             # Cyberpunk/neon color themes
-├── utils/
-│   ├── token_math.py         # EMA, velocity, regression helpers
-│   └── patterns.py           # Burn pattern classifier
-├── tests/
-│   ├── test_fuel_gauge.py
-│   ├── test_dna_engine.py
-│   └── test_pruner.py
-├── requirements.txt
-└── README.md
+│   └── dashboard.py          Rich live TUI
+└── requirements.txt
 ```
 
 ---
 
-## 🔧 How It Works
+## Honest limitations
 
-Claude Code stores every session as JSONL files in `~/.claude/projects/<project-hash>/`. Each line is a conversation turn with full token metadata including input tokens, output tokens, and cache statistics.
-
-**Claude Autopilot's pipeline:**
-
-1. **Watch** — inotify/polling watches the `.claude/projects/` directory for real-time file changes
-2. **Parse** — Extracts turn-level token data: input tokens, output tokens, cache hits, timestamp, file references
-3. **Velocity** — Computes burn rate using exponential moving average (EMA-7) on recent turns
-4. **Predict** — Projects session limit ETA using linear regression on cumulative token trend
-5. **Fingerprint** — Maps turn-level token deltas to Unicode block glyphs and classifies the pattern
-6. **Score** — Weights context files by recency-adjusted token contribution to identify prunable items
-7. **Forecast** — Fits a personal usage distribution model for monthly spend prediction
+- The pruner only knows about files Claude referenced via tool calls. It does not yet parse `CLAUDE.md` or auto-loaded files in `.claude/settings.json` directly, so it can miss bloat that is loaded but never touched.
+- Cost estimates assume Sonnet pricing as of early 2025. Update `INPUT_COST_PER_MILLION` / `OUTPUT_COST_PER_MILLION` in `core/forecaster.py` if you use a different model.
+- Tested only on macOS and Linux. Windows users probably need WSL.
+- `--apply` for pruning rewrites your `.claude/settings.json`. Back it up first if you have custom config.
 
 ---
 
-## 📈 Performance
+## Contributing
 
-Tested across **200+ real Claude Code sessions** from multiple developers:
+PRs and issues welcome, especially for:
 
-| Metric | Result |
-|--------|--------|
-| Limit prediction accuracy | ±8 min average |
-| Pruning token savings | 25–40% reduction |
-| Pruning quality loss | < 2% (measured by re-run) |
-| Anomaly detection precision | 94% |
-| Anomaly detection recall | 89% |
-| Dashboard refresh latency | < 50ms |
-| CPU overhead | < 0.3% |
+- Better pruning heuristics (parsing `CLAUDE.md`, auto-loaded files)
+- Multi-model pricing support
+- Windows compatibility
 
 ---
 
-## 🗺️ Roadmap
+## License
 
-- [ ] VSCode extension with inline fuel gauge
-- [ ] Slack/Discord webhook alerts at 80% / 95% capacity
-- [ ] Multi-model support (GPT-4o, Gemini 1.5)
-- [ ] Team dashboard (aggregate across developers)
-- [ ] Smart session checkpointing (auto-save context snapshots)
-- [ ] Prompt template suggestions based on efficiency history
-- [ ] Browser extension for Claude.ai web interface
-
----
-
-## 🤝 Contributing
-
-PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Priority areas:
-- VSCode extension
-- Webhook alert integrations
-- Pattern classifier improvements
-
----
-
-## 📄 License
-
-MIT © [Dharmik Soni](https://github.com/Dharmik2510)
-
----
-
-<div align="center">
-
-**Built with ❤️ for AI developers who refuse to fly blind**
-
-*If this saved your session, give it a ⭐*
-
-[Report Bug](https://github.com/Dharmik2510/claude-autopilot/issues) · [Request Feature](https://github.com/Dharmik2510/claude-autopilot/issues) · [LinkedIn](https://linkedin.com/in/dharmik-soni)
-
-</div>
+MIT (c) [Dharmik Soni](https://github.com/Dharmik2510)
